@@ -1,0 +1,349 @@
+--Candidate Ratings
+
+select users.loginemail as 'Consultant', users.firstname,users.lastname, candidateratings.candidateid, ratingscore as 'rating',candidateratings.createdon,ratingdate,ratingtag,candidateratingsid,candidate.country,candidate.city 
+from candidateratings left join users on candidateratings.userid = users.userid left join candidate on candidateratings.candidateid = candidate.candidateid 
+into outfile 'E:/Database/ratings0508.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n'
+
+--Client Ratings
+select client.clientname,jobs.jobname, clientmandaterating.areasofimprovement,clientmandaterating.averagerating,clientmandateratingvalues.ratingscore,ratingvalue,ratingtag,clientmembers.firstname,clientmembers.lastname,ratingdate 
+from clientmandaterating left join client on clientmandaterating.clientid = client.clientid left join clientmandateratingvalues on clientmandaterating.clientmandateratingid = clientmandateratingvalues.clientmandateratingid 
+left join clientmembers on clientmandaterating.createdby = clientmembers.clientmembersid left join jobs on clientmandaterating.jobid = jobs.jobid
+
+--Client Logins count
+select clientactivity.clientid, client.clientname, newvalue, clientactivity.updatedon from clientactivity left join client on clientactivity.clientid = client.clientid 
+where action = 'login' and newvalue not like '%whitecrowresearch%' and newvalue not like '%whitecrowdigital%' and newvalue not like '%colvill%'
+into outfile 'E:/Database/clientlogins30072019.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n';
+
+select clientactivity.clientid, client.clientname, newvalue, clientactivity.updatedon,users.firstname,users.lastname from clientactivity left join client on clientactivity.clientid = client.clientid 
+left join clientaccountmanagers on client.clientid = clientaccountmanagers.clientid left join users on clientaccountmanagers.userid = users.userid
+where action = 'login' and newvalue not like '%whitecrowresearch%' and newvalue not like '%whitecrowdigital%' and newvalue not like '%colvill%'
+into outfile 'E:/Database/clientloginsmanagers30072019.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n';
+
+
+
+--To pull candidates for duplicate
+
+select candidateid, candidate.firstname,candidate.lastname,currentcompany,jobtitle,candidate.personalemail,candidate.workemail,candidate.personalmobile,termsaccepted,candidate.createdon,users.firstname, users.lastname,candidate.updatedon 
+from candidate left join users on candidate.createdby = users.userid 
+into outfile 'E:/Database/dupcandidate2706.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n'
+
+292,	705,	10,	332,	410,	450,	707,	422,	432,	18,	9
+
+--For Jigar's query
+select candidateeducation.candidateeducationid,
+ group_concat(distinct Nullif(candidateeducation.schoolname,'')) as schoolname,
+ 
+group_concat(distinct Nullif(candidateeducation.degree,'')) as degree,
+ group_concat(distinct Nullif(candidateeducation.startdate,'')) as startdate,
+ 
+group_concat(distinct Nullif(candidateeducation.enddate,'')) as enddate,
+ group_concat(distinct Nullif(candidateeducation.fieldofstudy ,'')) as fieldofstudy,
+ 
+group_concat(distinct Nullif(candidateeducation.candidateeducationid ,'')) as candidateeducationid
+from candidateeducation where startdate is not null group by candidateeducation.startdate limit 2; 
+
+--Total experience of candidates in research mandates
+select candidateid,candidate.firstname,candidate.lastname,candidate.jobtitle,candidate.totalexperience, currentcompany,cr.firstname,cr.lastname,candidate.createdon,ur.firstname,ur.lastname,candidate.updatedon from candidate left join users cr on candidate.createdby = cr.userid left join users ur on candidate.updatedby = ur.userid where totalexperience is not null and candidate.createdon > '2019-04-15' and candidateid in (select distinct(mandateapplications.candidateid) from mandateapplications) and stage is null into outfile 'E:/Database/experience1805.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n';
+
+--To check gdpr candidates applicable for deletion
+--Candidate
+select count(*) from candidate where cast(createdon as date) < '2019-04-27' and gdprcandidate = 1;
+
+--Mandateapplications
+select count(distinct(mandateapplications.candidateid)) 
+from jobs left join mandateapplications on jobs.jobid = mandateapplications.jobid 
+where gdpr = 1 and cast(mandateapplications.publishedon as date) < '2019-04-27';
+
+--to pull hired reports
+select applicationid,client.clientname,applications.candidateid,candidate.firstname,candidate.lastname,jobs.jobname,ur.firstname,ur.lastname as 'taggedby', taggedon,users.managername,
+candidate.expectedsalary,candidate.currency,applications.offeredsalary,applications.offeredcurrency,applications.stage,applications.action  
+from applications left join candidate on applications.candidateid = candidate.candidateid left join jobs on applications.jobid = jobs.jobid 
+left join client on jobs.clientid = client.clientid left join users on applications.taggedby = users.userid 
+left join users ur on applications.taggedby = ur.userid 
+where applications.stage in ('joined') and taggedon > '2019-04-13' 
+into outfile 'E:/Database/hirecandidate2406.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n';
+
+--to pull hired report(NEW)
+select distinct(applicationlog.candidateid),client.clientname, candidate.firstname,candidate.lastname,jobs.jobname,users.firstname,users.lastname,applicationlog.createdon,
+candidate.expectedsalary,candidate.currency,mgr.firstname,mgr.lastname 
+from applicationlog left join candidate on applicationlog.candidateid = candidate.candidateid left join jobs on applicationlog.jobid = jobs.jobid 
+left join client on jobs.clientid = client.clientid left join users on applicationlog.createdby = users.userid 
+left join users mgr on users.managerid = mgr.userid 
+where applicationlog.newstage = 'Joined' 
+into outfile 'E:/Database/hired0108.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n'
+
+--Client daywise submissions in a job
+select distinct client.clientname,jobs.jobid,jobs.jobname,jobs.jobtype,applications.candidateid,cast(applicationlog.createdon as date) 
+from jobs left join client on jobs.clientid = client.clientid left join applications on jobs.jobid = applications.jobid left join candidate 
+on applications.candidateid = candidate.candidateid left join applicationlog on applications.applicationid = applicationlog.applicationid 
+where jobs.jobtype = 'Recruitment' and applicationlog.newstage = 'Submit to Client' 
+into outfile 'E:/Database/clientsubmissions1706.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n'
+
+--Client daywise published on a mandate
+select distinct client.clientname,mandateapplications.jobid,jobs.jobname,mandateapplications.candidateid,cast(mandateapplications.updatedon as date), cast(publishedon as date),jobs.jobtype 
+from mandateapplications left join jobs on mandateapplications.jobid = jobs.jobid left join client on jobs.clientid = client.clientid 
+where mandateapplications.isactive = 1 into outfile 'E:/Database/namespublished1706.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n'
+
+--Corrections report
+select candidateactivity.candidateid,candidate.firstname,candidate.lastname,action,candidateactivity.type,tablename,updatedfieldname,candidateactivity.createdon,
+candidateactivity.usertype,users.firstname,users.lastname,oldvalue,newvalue 
+from candidateactivity left join candidate on candidateactivity.candidateid = candidate.candidateid 
+left join users on candidateactivity.requestedby = users.userid 
+where candidateactivity.userid = 391 and candidateactivity.type = 'corrections' 
+into outfile 'E:/Database/corrections29062019.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n'
+
+--To pull Longlist list
+select candidate.candidateid,candidate.firstname,candidate.lastname,candidate.currentcompany,candidate.jobtitle,candidate.gender,candidate.switchboard,
+candidate.directdial,candidate.workmobile,candidate.linkedin,candidate.linkedinurlother,candidate.totalexperience 
+from candidate left join mandateapplications on candidate.candidateid = mandateapplications.candidateid 
+left join researchnotes on mandateapplications.candidateid = researchnotes.candidateid 
+where mandateapplications.jobid = 25981
+
+--To identify GDPR Candidates - priti's query
+select candidate.candidateid,candidate.termsaccepted,candidate.createdon,candidate.gdprcandidate,candidatedocuments.docurl,candidatedocuments.doctype 
+from candidate  left join candidatedocuments on candidate.candidateid = candidatedocuments.candidateid 
+where (termsaccepted <> 1 or termsaccepted is null) and candidate.createdon < (NOW()-INTERVAL 1 MONTH) 
+and candidate.candidateid not in (select candidateid from mandateapplications where isactive <> 1) and gdprcandidate = 1;
+
+select count(candidate.candidateid)
+from candidate  left join candidatedocuments on candidate.candidateid = candidatedocuments.candidateid 
+where (termsaccepted <> 1 or termsaccepted is null) and candidate.createdon < (NOW()-INTERVAL 1 MONTH) 
+and candidate.candidateid not in (select candidateid from mandateapplications where isactive = 1) and gdprcandidate = 1 and (issanitized = 0 or issanitized is null)
+
+--my query
+select candidate.candidateid,candidate.termsaccepted,candidate.createdon,candidate.gdprcandidate,candidatedocuments.docurl,candidatedocuments.doctype 
+from candidate  left join candidatedocuments on candidate.candidateid = candidatedocuments.candidateid 
+where (termsaccepted <> 1 or termsaccepted is null) and candidate.createdon < (CURDATE()-INTERVAL 1 MONTH) 
+and candidate.candidateid not in (select candidateid from mandateapplications where isactive <> 1 or isactive is null) and gdprcandidate = 1;
+
+select count(candidate.candidateid)
+from candidate  left join candidatedocuments on candidate.candidateid = candidatedocuments.candidateid 
+where (termsaccepted <> 1 or termsaccepted is null) and candidate.createdon < (CURDATE()-INTERVAL 1 MONTH) 
+and candidate.candidateid not in (select candidateid from mandateapplications where isactive <> 1 or isactive is null) and gdprcandidate = 1 and (issanitized = 0 or issanitized is null);
+
+
+
+select candidate.candidateid,candidate.gdprcandidate,candidate.termsaccepted,candidate.createdon,max(candidatedocuments.docurl) as docurl,mandateapplications.isactive,
+mandateapplications.updatedon as publishedon 
+from candidate left join mandateapplications on candidate.candidateid = mandateapplications.candidateid left join candidatedocuments on candidatedocuments.candidateid = candidate.candidateid 
+where (termsaccepted <> 1 or termsaccepted  is NULL) and candidate.gdprcandidate = 1 and mandateapplications.updatedon < (NOW()-INTERVAL 1 MONTH) 
+and candidate.createdon < (NOW()-INTERVAL 1 MONTH) group by candidate.candidateid order by mandateapplications.updatedon limit 2;
+
+
+--Weekly Delivery Report
+--Research candidates identified
+select count(distinct(candidate.candidateid)) from mandateapplications left join candidate on mandateapplications.candidateid = candidate.candidateid where jobid in (select jobid from jobs where clientid = 986) and publishedon between '2019-06-03' and '2019-06-09';
+
+--switchboard
+select count(distinct(candidate.switchboard)) from mandateapplications left join candidate on mandateapplications.candidateid = candidate.candidateid where jobid in (select jobid from jobs where clientid = 986) and publishedon between '2019-06-03' and '2019-06-09' and switchboard is not null and switchboard != '' and switchboard != '0';
+
+--direct dial
+select count(distinct(candidate.directdial)) from mandateapplications left join candidate on mandateapplications.candidateid = candidate.candidateid where jobid in (select jobid from jobs where clientid = 986) and publishedon between '2019-06-03' and '2019-06-09' and directdial is not null and directdial != '' and directdial != '0';
+
+--work mobile
+select count(distinct(candidate.workmobile)) from mandateapplications left join candidate on mandateapplications.candidateid = candidate.candidateid where jobid in (select jobid from jobs where clientid = 986) and publishedon between '2019-06-03' and '2019-06-09' and workmobile is not null and workmobile != '' and workmobile != '0';
+
+--personal mobile
+select count(distinct(candidate.personalmobile)) from mandateapplications left join candidate on mandateapplications.candidateid = candidate.candidateid where jobid in (select jobid from jobs where clientid = 986) and publishedon between '2019-06-03' and '2019-06-09' and personalmobile is not null and personalmobile != '' and personalmobile != '0';
+
+--personal email
+select count(distinct(candidate.personalemail)) from mandateapplications left join candidate on mandateapplications.candidateid = candidate.candidateid where jobid in (select jobid from jobs where clientid = 986) and publishedon between '2019-06-03' and '2019-06-09' and personalemail is not null and personalemail != '' and personalemail != '0';
+
+--work email
+select count(distinct(candidate.workemail)) from mandateapplications left join candidate on mandateapplications.candidateid = candidate.candidateid where jobid in (select jobid from jobs where clientid = 986) and publishedon between '2019-06-03' and '2019-06-09' and workemail is not null and workemail != '' and workemail != '0';
+
+--linkedin
+select count(distinct(candidate.linkedin)) from mandateapplications left join candidate on mandateapplications.candidateid = candidate.candidateid where jobid in (select jobid from jobs where clientid = 986) and publishedon between '2019-06-03' and '2019-06-09' and linkedin is not null and linkedin != '';
+
+--Recruitment
+--applicants
+select count(distinct(applicationlog.candidateid)) from applicationlog left join candidate on applicationlog.candidateid = candidate.candidateid left join jobs on applicationlog.jobid = jobs.jobid left join client on jobs.clientid = client.clientid where applicationlog.newstage = 'Applicants' and cast(applicationlog.updatedon as date) between '2019-06-03' and '2019-06-09' and client.clientid = 986;
+
+--submitted
+select count(distinct(applicationlog.candidateid)) from applicationlog left join candidate on applicationlog.candidateid = candidate.candidateid left join jobs on applicationlog.jobid = jobs.jobid left join client on jobs.clientid = client.clientid where applicationlog.newstage = 'Submit to Client' and cast(applicationlog.updatedon as date) between '2019-06-03' and '2019-06-09' and client.clientid = 986;
+
+--shortlisted
+select count(distinct(applicationlog.candidateid)) from applicationlog left join candidate on applicationlog.candidateid = candidate.candidateid left join jobs on applicationlog.jobid = jobs.jobid left join client on jobs.clientid = client.clientid where applicationlog.newstage = 'Applicants' and newaction = 'Client shortlisted' and cast(applicationlog.updatedon as date) between '2019-06-03' and '2019-06-09' and client.clientid = 986;
+
+--interviewed
+select count(distinct(applicationlog.candidateid)) from applicationlog left join candidate on applicationlog.candidateid = candidate.candidateid left join jobs on applicationlog.jobid = jobs.jobid left join client on jobs.clientid = client.clientid where applicationlog.newstage = 'Interview' and cast(applicationlog.updatedon as date) between '2019-06-03' and '2019-06-09' and client.clientid = 986;
+
+--offered
+select count(distinct(applicationlog.candidateid)) from applicationlog left join candidate on applicationlog.candidateid = candidate.candidateid left join jobs on applicationlog.jobid = jobs.jobid left join client on jobs.clientid = client.clientid where applicationlog.newstage = 'Offered' and cast(applicationlog.updatedon as date) between '2019-06-03' and '2019-06-09' and client.clientid = 986;
+
+--joined
+select count(distinct(applicationlog.candidateid)) from applicationlog left join candidate on applicationlog.candidateid = candidate.candidateid left join jobs on applicationlog.jobid = jobs.jobid left join client on jobs.clientid = client.clientid where applicationlog.newstage = 'joined' and cast(applicationlog.updatedon as date) between '2019-06-03' and '2019-06-09' and client.clientid = 986;
+
+--rejects
+select count(distinct(applicationlog.candidateid)) from applicationlog left join candidate on applicationlog.candidateid = candidate.candidateid left join jobs on applicationlog.jobid = jobs.jobid left join client on jobs.clientid = client.clientid where applicationlog.newstage like 'reject%' and cast(applicationlog.updatedon as date) between '2019-06-03' and '2019-06-09' and client.clientid = 986;
+
+
+insert into users(loginemail,pwd,firstname,lastname,rolename,extn,gender,ecn,department,company,designation,doj,dob,roleid) 
+select loginemail,pwd,firstname,lastname,rolename,extn,gender,ecn,department,company,designation,doj,dob,roleid from live2504.users
+
+
+update candidatedocuments set docurl = 'https://talantonresumes.s3.ap-south-1.amazonaws.com/Murtuza_Murtuza_3e68035a-b8e6-40b3-a44b-5f749a46e2urtuza_3e68035a-b8e6-40b3-a44b-5f749a46e25f.pdf' where candidatedocid = 107311;
+
+mysql -h rds-finaldb.ccgfvxi8ooky.ap-south-1.rds.amazonaws.com -P 3306 -u liveaegis -p --database=talantonlive1404 -e 
+"select candidatedocid,candidateid, filename, docurl from candidatedocuments where docurl = '0' and filename != '' and filename is not null" > /home/ubuntu/candidatefilenames.csv
+
+insert into subclientcontract(subclientid,subclientcontactid,contractname,period,bank,salesrepresentative,currency,startdate,duration,internalclassification,rrasplit,totalamount,noofdesk,accountmanager,entity,isactive,createdby,createdon,updatedby,updatedon,clientid,internalcompanyid,bdm,bdmuser) 
+values('2312','2330','Allegis Global Solutions (Hong Kong) Limited Company Mar 19','Monthly','ICICI Bank','Prems','USD','2019-03-15','0','Enterprise','Research and Approach','10500','5','Vaibhav - 3 desk (Approach) / Halley - 2 desk (Mapping)','Search','1','9','2019-03-19 16:39:40','9','2019-03-21 09:26:39','335','2026','1298','Prems')
+
+
+mysql -h rds-finaldb.ccgfvxi8ooky.ap-south-1.rds.amazonaws.com -P 3306 -u liveaegis -p --database=talantonlive1404 -e 
+"select candidateid,ratingscore,ratingtag,ratingdate,candidateratings.createdby,candidateratings.userid,candidateratings.updatedby,users.firstname,users.lastname,users.loginemail from candidateratings left join users on candidateratings.userid = users.userid" > ratings3105.csv
+
+
+--Sub client bank, currency
+select subclientcontractid,subclient.subclientid,subclientname,subclientcontact.firstname,subclientcontact.lastname, subclientcontract.bank,subclientcontract.currency from subclientcontract left join subclient on subclientcontract.subclientid = subclient.subclientid left join subclientcontact on subclientcontract.subclientid = subclientcontact.subclientid into outfile 'E:/Database/bankdetails.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n'
+
+--Sub client bank, currency new
+select subclientcontractid,subclient.subclientid,subclientname, subclientcontract.bank,subclientcontract.currency from subclientcontract left join subclient on subclientcontract.subclientid = subclient.subclientid into outfile 'E:/Database/bankdetails.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n'
+
+--DB team corrections data
+--recruitment
+select applications.candidateid,firstname,lastname,currentcompany,candidate.jobtitle,jobs.jobname from 
+applications left join jobs on applications.jobid = jobs.jobid left join candidate on applications.candidateid = candidate.candidateid 
+where jobs.jobid in (1791,	1794,	1795,	1796,	1797,	1877,	2402,	3572,	3773,	4084,	4184,	4186,	4187,	4361,	4362,	4498,	4499,	4500,	4501,	4520,	4698,	5342,	5352,	5452,	5494,	5789,	5886,	5919,	5923,	5924,	26031,	26032,	26033,	26034,	26035,	26240,	26241,	26242,	26465,	26564,	26565,	26592,	26596,	26597,	26709,	26737,	26871,	26880,	26887,	26931)
+into outfile 'E:/Database/Konerecruitment.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n'
+
+--research
+select mandateapplications.candidateid,firstname,lastname,currentcompany,candidate.jobtitle,jobs.jobname 
+from mandateapplications left join jobs on mandateapplications.jobid = jobs.jobid left join candidate on mandateapplications.candidateid = candidate.candidateid 
+where jobs.jobid in (25749,	26063,	26126,	26127,	26233,	26234,	26235,	26507,	26508,	26818,	26852,	26881,	26888) 
+into outfile 'E:/Database/Koneresearch.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n'
+
+update users set roleid = 11 where userid in (1272,	1273,	1274,	1275,	1276,	1277,	1278,	1279,	1280,	1283,	1284,	1287,	1288,	1289,	1290,	1291,	1292,	1293,	1294,	1295,	1296,	1297,	1299,	1300,	1301,	1302,	1307,	1308,	1309,	1310)
+
+--IT candidate report
+--candidate
+select candidate.candidateid,candidateexperienceid,firstname,lastname,candidate.country,candidate.city,totalexperience,candidate.jobtitle,currentcompany,company.industry,candidateexperience.workcountry,candidateexperience.iscurrent from candidate left join company on candidate.currentcompany = company.companyname left join candidateexperience on candidate.candidateid = candidateexperience.candidateid  where  company.industry in ('Information Technology and Services','E-Learning','Computer & Network Security','Computer Games','Computer Hardware','Computer Networking','Computer Software') and (candidate.country in ('India','United States','Singapore') or candidateexperience.workcountry in ('India','United States','Singapore')) into outfile 'E:/Database/ITcandidatenew.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n'
+
+--company
+select candidate.candidateid,candidateexperienceid,firstname,lastname,candidate.country,candidate.city,totalexperience,candidate.jobtitle,currentcompany,company.industry,candidateexperience.workcountry,candidateexperience.iscurrent from candidate left join company on candidate.currentcompany = company.companyname left join candidateexperience on candidate.candidateid = candidateexperience.candidateid  where  candidate.currentcompany in ('National Grid','Deloitte','Wipro','Teradata','Hitachi') into outfile 'E:/Database/ITcandidatecompany.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n'
+
+--mandate
+select jobs.jobid,jobname,jobtype,jobs.minexperience,jobs.maxexperience,jobs.minsalary,jobs.maxsalary,jobs.jobtitle,otherjobdetails.name,otherjobdetails.type from jobs left join otherjobdetails on jobs.jobid = otherjobdetails.jobid where jobs.jobtype = 'Recruitment' into outfile 'E:/Database/ITmandates.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n'
+
+--Scorecard reports
+--candidates
+select users.firstname,users.lastname,candidate.createdon,uu.firstname,uu.lastname,candidate.updatedon from candidate left join users on candidate.createdby = users.userid left join users uu on candidate.updatedby = uu.userid where candidate.createdon between '2019-04-13 00:00:00' and '2019-06-21 00:00:00' into outfile 'E:/Database/scorecarddata.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n'
+
+--candidate cvs
+select users.firstname,users.lastname,candidatedocuments.createdon,uu.firstname,uu.lastname,candidatedocuments.updatedon from candidatedocuments left join users on candidatedocuments.createdby = users.userid left join users uu on candidatedocuments.updatedby = uu.userid where candidatedocuments.createdon between '2019-04-13 00:00:00' and '2019-06-21 00:00:00' and candidatedocuments.doctype = 'CV' into outfile 'E:/Database/scorecarddatacv.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n'
+
+
+
+
+select users.loginemail as 'Consultant', users.firstname,users.lastname, candidateratings.candidateid, ratingscore as 'rating',candidateratings.createdon,ratingdate,ratingtag,candidateratingsid,candidate.country,candidate.city 
+from candidateratings left join users on candidateratings.userid = users.userid left join candidate on candidateratings.candidateid = candidate.candidateid 
+where candidate.candidateid in (select candidateid from applications where jobid in (select jobid from jobs where clientid = 482))
+into outfile 'E:/Database/kellogsratings.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n'
+
+
+select jobs.maxexperience,jobs.minexperience, count(jobs.jobid)
+from jobs
+where jobs.clientid in (335,336,3157) and jobs.jobtype = 'Recruitment' and jobs.createdby not in (292,705,10,332,410,450,707,422,432,18) 
+and jobs.maxexperience is not null and jobs.maxexperience != '' and jobs.maxexperience != 0 
+and jobs.minexperience is not null and jobs.minexperience != '' and jobs.minexperience != 0
+group by jobs.maxexperience,jobs.minexperience
+limit 10
+
+
+ and jobs.maxexperience is not null and jobs.maxexperience != '' and jobs.maxexperience != 0 
+
+group by jobs.currency 
+
+select otherjobdetails.name,count(otherjobdetails.jobdetailsid) 
+from jobs left join otherjobdetails on jobs.jobid = otherjobdetails.jobid  
+where jobs.clientid in (335,336,3157) and jobs.jobtype = 'Recruitment' and jobs.createdby not in (292,705,10,332,410,450,707,422,432,18) 
+and otherjobdetails.type = 'location' group by name order by count(otherjobdetails.jobdetailsid) desc  limit 10;
+
+select otherjobdetails.name,count(otherjobdetails.jobdetailsid) 
+from jobs left join otherjobdetails on jobs.jobid = otherjobdetails.jobid  
+where jobs.clientid in (335,336,3157) and jobs.jobtype = 'Research' and jobs.createdby not in (292,705,10,332,410,450,707,422,432,18) 
+and otherjobdetails.type = 'functions' group by name order by count(otherjobdetails.jobdetailsid) desc  limit 10;
+
+
+update users set roleid = 7 where userid = 26;
+
+update users set managername = 'Riya Warik', managerid = 170 where userid = 28;
+update users set managername = 'Vrushali Gade', managerid = 405 where userid = 1336;
+
+
+
+
+--Inbound source candidate
+select candidate.candidateid,inboundsource,applications.applicationid, candidate.firstname,candidate.lastname,jobs.jobid, jobs.jobname,applicationlog.applicationtype,
+applicationlog.usertype,applications.taggedby,applications.taggedon,applications.offeredsalary,applications.offeredcurrency,applications.stage,applications.action,
+applications.applicationstatus,applications.applicationstatus,applications.updatedby,applications.expecteddateofjoining
+from candidate left join applications on candidate.candidateid = applications.candidateid left join applicationlog on candidate.candidateid = applicationlog.candidateid 
+left join jobs on applications.jobid = jobs.jobid 
+where candidate.inboundsource in ('linkedin','register') into outfile 'E:/Database/inboundcandidate2007.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n';
+
+
+select jobname,jobid,jobtype,jobstatus,createdon from jobs where clientid in (335,336,3157) and jobtype = 'Research' 
+and createdby not in (292,705,10,332,410,450,707,422,432,18);
+
+
+
+
+select count(candidate.candidateid)
+from candidate left join mandateapplications on candidate.candidateid = mandateapplications.candidateid left join candidatedocuments on 
+candidatedocuments.candidateid = candidate.candidateid 
+where (termsaccepted <> 1 or termsaccepted  is NULL) and candidate.gdprcandidate = 1 and mandateapplications.updatedon < (NOW()-INTERVAL 1 MONTH) 
+and candidate.createdon < (NOW()-INTERVAL 1 MONTH) and (issanitized = 0 or issanitized is null) 
+order by mandateapplications.updatedon LIMIT 180,30 group by candidate.candidateid 
+
+
+--For Schema - Foreign keys
+select table_name,column_name, constraint_name,referenced_table_name,referenced_column_name from information_schema.key_column_usage where constraint_name like 'FK%' and table_schema = 'rebuild1807'  into outfile 'E:/Database/aegisforeignkeys.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n';
+
+--For Schema
+select table_schema,table_name,column_name,data_type,column_type from information_schema.columns where table_schema = 'rebuild1807' into outfile 'E:/Database/aegisschema.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n';
+
+select clientmembersid,clientid,firstname, lastname, email, region, role from clientmembers where clientid = 978 and isactive = 1 and role = 'member' 
+and clientmembersid not in (select distinct clientmembersid from mandateclientmembers where jobid = 25576 and isactive = 1)
+
+
+--Inbound reports
+--1. Candidate counts
+select distinct(inboundsource),count(*) from candidate group by inboundsource
+
+select distinct(cast(createdon as date)),count(termsaccepted) from candidate group by cast(createdon as date)
+
+--2 Inbound candidates
+select (select count(candidateid) from candidate where inboundsource is not null) as 'total count', inboundsource,count(distinct(applications.candidateid)) as 'inbound count' from candidate left join applications on candidate.candidateid = applications.candidateid where inboundsource is not null group by inboundsource
+
+--3 Comments
+--research
+select distinct(usertype),count(*) from researchnotes left join jobs on researchnotes.jobid = jobs.jobid where jobs.jobtype = 'research' group by usertype
+
+--recruitment
+select distinct(usertype),count(*) from applicationnotes left join jobs on applicationnotes.jobid = jobs.jobid where applicationnotes.createdby not in (292,705,10,332,410,450,707,422,432,18) and jobs.jobtype = 'recruitment' group by usertype;
+
+--4 client applications
+select stage,action,count(distinct(candidateid)) from applications where usertype like '%clientmember%' group by stage,action;
+
+--5 member logins more than 1
+select client.clientname, newvalue,count(*) from clientactivity left join client on clientactivity.clientid = client.clientid where action = 'login' and newvalue not like '%whitecrowresearch%' and newvalue not like '%whitecrowdigital%' and newvalue not like '%colvill%'
+group by client.clientname,newvalue having count(*) > 1
+
+
+insert into clientmembers(firstname,lastname,email,password,role) 
+values('Anthea', 'Cabral', 'anthea.cabral@whitecrowresearch.com', 'a9671978fc975f3439fd03b2f3b4b254', 'accmanager');
+
+--Non terms accepted in applications
+select candidate.candidateid,firstname,lastname,candidate.createdby,candidate.updatedby,candidate.createdon,candidate.updatedon,applications.updatedon,applications.updatedby,applications.stage,jobs.jobid,jobs.jobname,client.clientid,client.clientname,taggedon,taggedby from candidate left join applications on candidate.candidateid = applications.candidateid left join jobs on applications.jobid = jobs.jobid left join client on jobs.clientid = client.clientid where (termsaccepted = 0 or termsaccepted is null) and applications.stage in ('Submit to Client', 'Offered', 'Joined', 'Interview') into outfile 'E:/Database/nontermsaccepted.csv' fields terminated by ',' enclosed by '"' lines terminated by '\n';
+
+
+
+insert into clientmembers(firstname,lastname,email,password,role) 
+values('Cabral', 'anthea.cabral@whitecrowresearch.com', '1', 'insert into clientmembers(firstname,lastname,email,password,role) values('Anthea', 'Cabral', 'anthea.cabral@whitecrowresearch.com', 'a9671978fc975f3439fd03b2f3b4b254', 'accmanager');', 'spoc');
+
+--for Rohans report
+select candidate.candidateid,candidate.city,candidate.country,termsaccepted,jobs.jobid,jobs.jobname,jobs.jobtype,jobs.jobstatus,candidateexperience.workcity,candidateexperience.workcountry from mandateapplications left join candidate on mandateapplications.candidateid = candidate.candidateid left join jobs on mandateapplications.jobid = jobs.jobid left join candidatedocuments on candidate.candidateid = candidatedocuments.candidateid left join candidateexperience on candidate.candidateid = candidateexperience.candidateid  where mandateapplications.jobid in (26997,26998,26999,27001);
+
+
+
